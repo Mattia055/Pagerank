@@ -1,5 +1,13 @@
 #include "lib_supp.h"
-
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <stdbool.h>
+#include <string.h>
+#include <unistd.h>
 /*
  * Error function
  * --------------
@@ -38,8 +46,8 @@ void *xrealloc(void *ptr,size_t size,char *file,int line){
 }
 
 void *xreallocarray(void *ptr, size_t nmemb, size_t size, char *file, int line){
-    void *ptr = reallocarray(ptr,nmemb,size);
-    if(ptr == NULL){
+    void *ret = reallocarray(ptr,nmemb,size);
+    if(ret == NULL){
         error("[Bad reallocarray]",file,line);
     }
 }

@@ -1,20 +1,11 @@
 #ifndef LIB_SUPP
 #define LIB_SUPP
 
-#define _GNU_SOURCE   
-#include <stdio.h>    
-#include <stdlib.h>   
-#include <stdbool.h> 
-#include <errno.h>    
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/mman.h>
+#include <stddef.h>
+#include <stdio.h>
 #include <semaphore.h>
 #include <pthread.h>
-#include <time.h>
-#include <signal.h>
+
 
 
 /**
@@ -36,7 +27,7 @@ void *xcalloc(size_t nmemb, size_t size, char *file,int line);
 
 void *xrealloc(void *ptr,size_t size,char *file,int line);
 
-void *xreallocarray(void *ptr, size_t nmemb, size_t size, char *file,int line);
+void *xreallocarray(void *ptr, size_t nmemb, size_t size, char *file, int line);
 
 /**
  * ### File Streams
@@ -118,7 +109,7 @@ void xpthread_cond_broadcast(pthread_cond_t *c,char *file,int line);
  * ### Logging module
  * ------------------
  * Implementation of basic interface that lets you
- * keep track of
+ * keep track of log files
  */
 
 #endif

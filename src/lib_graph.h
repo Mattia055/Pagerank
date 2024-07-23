@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <semaphore.h>
+#include "lib_supp.h"
 
 #define HERE __FILE__,__LINE__
 #define BUF_SIZE    2048
@@ -52,8 +53,7 @@ static inline void inmap_push(inmap **obj, int elem, int *size){
 }
 
 static inline void inmap_free(inmap *ptr){
-    if(ptr == NULL)
-        return;
+    if(ptr == NULL)return;
 
     free(ptr->vector);
     free(ptr);
@@ -61,15 +61,41 @@ static inline void inmap_free(inmap *ptr){
 
 graph *graph_alloc(int nodes, int edges);
 
+void graph_destroy(graph *);
+
 typedef struct parser_attr{
     int             index;
     int             *pc_buffer;
     int             *dyn_size;
     pthread_mutex_t *buffer_mux;
-    pthread_mutex_t **graph_mux;
+    pthread_mutex_t *graph_mux;
     sem_t           *free_slots;
     sem_t           *data_items;
     graph           *graph;
 }parser_attr;
+
+typedef struct sorter_attr_shared{
+    int              pc_index;
+    int             *pc_buffer;
+    graph           *graph;
+    pthread_mutex_t *buffer_mux;
+    sem_t           *free_slots;
+    sem_t           *data_items;
+}sorter_attr_shared;
+
+typedef struct sorter_attr{
+    sorter_attr_shared  *shared;
+    int                 interval_start;
+    int                 interval_end;
+}sorter_attr;
+
+graph *graph_parse(const char *,const int);
+
+void *parser_routine(void *);
+
+int cmp(const void *a, const void *b);
+
+void *sorter_routine(void *);
+
 
 #endif
