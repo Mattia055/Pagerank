@@ -5,13 +5,13 @@ CFLAGS	= -Wall -O -std=c11
 LDLIBS	= -lm -lrt -pthread
 
 # eseguibili da costruire
-EXECS	= pagerank
+EXECS	= pagerank.exe
 LIB 	= ./src/
 
 
 # di default make cerca di realizzare il primo target 
 all: $(EXECS)
-	rm -r *.o
+	rm -f *.o
 
 # non devo scrivere il comando associato ad ogni target 
 # perché il defualt di make in questo caso va bene
@@ -28,10 +28,10 @@ lib_pagerank.o:$(LIB)*.h $(LIB)lib_pagerank.c
 pagerank.o: pagerank.c $(LIB)*.h
 	$(CC)  -c pagerank.c -o $@
 
-pagerank: lib_supp.o lib_graph.o lib_pagerank.o pagerank.o
+pagerank.exe: lib_supp.o lib_graph.o lib_pagerank.o pagerank.o
 	$(CC)  $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 # target che cancella eseguibili e file oggetto
 clean:
-	rm -f $(EXECS) *.o 
+	rm -f $(EXECS) *.o *.exe *.log *.zip *.val *vgcore*
 
