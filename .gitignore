@@ -1,0 +1,17 @@
+#
+#   FILES TO IGNORE
+#
+*.o
+*.log
+*.mtx
+*val*
+*.zip
+*.exe
+
+
+#
+# DIRECTORIES TO IGNORE
+#
+./temp
+./test/
+
