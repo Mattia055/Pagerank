@@ -5,14 +5,24 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <getopt.h>
+#include <string.h>
 
 #include "./src/lib_supp.h"
 #include "./src/lib_graph.h"
 #include "./src/lib_pagerank.h"
 
+
+
 #define _GNU_SOURCE
 
 #define HERE __FILE__,__LINE__
+
+/**
+ * global variables shared with signal handler
+ * 
+ */
+double *global_X_prec;
+pthread_mutex_t global_mutex;
 
 int main(int argc, char *argv[]){
     int k = 3;
@@ -22,7 +32,10 @@ int main(int argc, char *argv[]){
     int threads = 3;
     //turned true for testing
     bool signal = false;
-    
+
+    /**
+     * Parameter parsing from argv
+     */
     int opt;
     while ((opt = getopt(argc, argv, "shk:m:d:e:t:")) != -1) {
         switch (opt) {
@@ -59,6 +72,8 @@ int main(int argc, char *argv[]){
     }
 
     char *infile = argv[optind];
+
+    int iter_count = 0;
     
 
     /**
@@ -83,9 +98,15 @@ int main(int argc, char *argv[]){
 
     graph *g = graph_parse(infile,threads);
 
-    printGraphInfo(g,stdout);
+    printGraphInfo(g,stdout,false);
+
+    double *ranks = pagerank(g, d, e, m, threads, &iter_count);
+    printf("itercount = %d\n",iter_count);
+
+    printStats(ranks,g->nodes,iter_count,m,k,stdout);
 
     graph_destroy(g);
+    free(ranks);
 
     return 0;
 
