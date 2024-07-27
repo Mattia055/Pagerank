@@ -5,7 +5,7 @@ CFLAGS	= -Wall -O -std=c11
 LDLIBS	= -lm -lrt -pthread
 
 # eseguibili da costruire
-EXECS	= pagerank.exe
+EXECS	= pagerank.exe 
 LIB 	= ./src/
 
 
@@ -33,5 +33,5 @@ pagerank.exe: lib_supp.o lib_graph.o lib_pagerank.o pagerank.o
 
 # target che cancella eseguibili e file oggetto
 clean:
-	rm -f $(EXECS) *.o *.exe *.log *.zip *.val *vgcore*
+	rm -f $(EXECS) *.o *.exe *log* *.zip *.val *vgcore*
 
