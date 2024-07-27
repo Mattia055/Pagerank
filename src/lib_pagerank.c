@@ -38,201 +38,6 @@ inline void printGraphInfo(graph *g,FILE *stream,bool comment){
     else
         fprintf(stream, "%%Number of nodes: %d \n%%Number of dead-end nodes: %d\n%%Number of valid arcs: %d\n", g->nodes, g->dead_count, g->edges);
 }
-
-void *calculate_pagerank(void *a){
-    pagerank_thread *arg = (pagerank_thread *)a;
-    int mio_index = -1;
-    int mio_index2 = -1;
-    double teleport = (1.0 - arg->dumping_factor) / ((double)arg->grafo->nodes);
-    
-    //variabile che uso per scambiare X_t con X_t+1
-    double *temp;
-    while(arg->exit == false){
-
-        // === CALCOLO Y_t ===
-        while(true){
-            xpthread_mutex_lock(arg->vector_lock, HERE);
-                mio_index = arg->index;
-                arg->index += 1;
-            xpthread_mutex_unlock(arg->vector_lock, HERE);
-
-            if(mio_index >= arg->grafo->nodes)
-                break;
-            
-            if(arg->grafo->out[mio_index] > 0)
-                arg->Y[mio_index] = (*(arg->X_prec))[mio_index] / (double) arg->grafo->out[mio_index];
-
-        }
-
-        // === ATTENDO FINE CALCOLO Y_t ===
-        xpthread_mutex_lock(arg->vector_lock, HERE);
-            if(arg->sospesi_Y == arg->N_thread - 1){
-                //printArrayd(arg->Y,arg->grafo->N);
-                arg->index = 0;
-                xpthread_cond_broadcast(arg->vector_cond, HERE);
-            } 
-            else {
-                arg->sospesi_Y += 1;
-                while (arg->index >= arg->grafo->nodes)
-                    xpthread_cond_wait(arg->vector_cond, arg->vector_lock, HERE);
-                arg->sospesi_Y -= 1;
-            }
-        xpthread_mutex_unlock(arg->vector_lock, HERE);
-
-        // === FASE CALCOLO VETTORE X_t+1 ===
-
-        while (true){
-            
-            xpthread_mutex_lock(arg->vector_lock, HERE);
-                mio_index2 = arg->index2;
-                arg->index2 += 1;
-            xpthread_mutex_unlock(arg->vector_lock, HERE);
-            
-            if(mio_index2 >= arg->grafo->nodes)
-                break;
-            
-            double somma = 0.0;
-            inmap *obj = ((arg->grafo)->in)[mio_index2];
-            
-            if(obj != NULL){
-                for(int i = 0; i < obj->length; i++){
-                    int node = obj->vector[i];
-                    somma += arg->Y[node];
-                }
-            }             
-            (*(arg->X_vector))[mio_index2] = teleport + (arg->dumping_factor * somma) + (arg->dumping_factor / (double)(arg->grafo->nodes)) * arg->S_t;     
-        }
-        
-        // === ATTENDO CALCOLO COMPONENTI X_t+1 ===
-        double error = 0.0;
-        xpthread_mutex_lock(arg->vector_lock, HERE);
-
-            if(arg->sospesi_X == arg->N_thread - 1){
-                // == verifica ERRORE ==
-
-                for(int i = 0; i < arg->grafo->nodes; i++){
-                    error+=fabs((*(arg->X_prec))[i] - (*(arg->X_vector))[i]);
-                }
-                
-                if(error < arg->epsilon || *(arg->N_iter) == arg->maxiter - 1){
-                    arg->exit = true;
-                    arg->index2 = 0;
-                }                 
-                else {
-                    // == ricalcolo S_t per nuova iterazione == 
-                    arg->S_t = 0.0;
-                    for(int i = 0; i < arg->grafo->dead_count; i++){ 
-                        int nodo = arg->grafo->dead_end[i];
-                        arg->S_t += (*(arg->X_vector))[nodo];
-                    }
-                    //printf("S_t= %f\n",arg->S_t);
-                }
-                double somma_Y;
-                for(int i = 0; i < arg->grafo->nodes; i++){
-                    somma_Y += arg->Y[i];
-                }
-                
-                xpthread_mutex_lock(arg->signal_mutex, HERE);
-                    temp = *(arg->X_prec);
-                    *(arg->X_prec) = *(arg->X_vector);
-                    *(arg->X_vector) = temp;
-
-                    if(arg->exit){
-                        free(*(arg->X_prec));
-                        *(arg->X_prec) = NULL;
-                    }
-                    *(arg->N_iter) += 1;
-                    arg->index2 = 0;
-                xpthread_mutex_unlock(arg->signal_mutex, HERE);
-                xpthread_cond_broadcast(arg->vector_cond, HERE);
-            }
-            else {
-                arg->sospesi_X += 1;
-                while(arg->index2 >= arg->grafo->nodes)
-                    xpthread_cond_wait(arg->vector_cond, arg->vector_lock, HERE);
-                arg->sospesi_X -= 1;
-            }
-
-        xpthread_mutex_unlock(arg->vector_lock, HERE);
-    }
-    pthread_exit(NULL);
-}
-
-double *pagerank(graph *g, double d, double eps, int maxiter, int taux, int *numiter){
-     
-    // allocazione vettori per le iterazioni
-    double  *X_vector = xmalloc(g->nodes * sizeof(double), HERE);
-        global_X_prec = xmalloc(g->nodes * sizeof(double), HERE);
-    double *Y = xcalloc(g->nodes, sizeof(double), HERE);
-
-    // popolamento vettori iterazioni
-   
-    for(int i = 0; i < g->nodes; i++){
-        X_vector[i] = (1.0 / (double)g->nodes);
-        (global_X_prec)[i] = (1.0 / (double)g->nodes);
-    }
-    
-    double S_t = 0.0;
-    int node = -1;
-
-    /**
-     * Calcolo S_t
-     * -----------
-     * S_t = somma dei valori dell'iterazione precedente dei dead end nodes
-     * 
-     */
-
-    for(int i = 0; i < g->dead_count; i++){
-        node = g->dead_end[i];
-        S_t += global_X_prec[node];
-    }
-
-    //Conto un iterazione fatta
-    // (*numiter) += 1;
-
-    pthread_t tid[taux];
-    pagerank_thread dati_pagerank;
-
-    pthread_mutex_t vector_lock;
-    pthread_cond_t vector_cond;
-    xpthread_mutex_init(&vector_lock, HERE);
-    xpthread_cond_init(&vector_cond, HERE);
-    dati_pagerank.X_vector =    &X_vector;
-    dati_pagerank.X_prec =      &global_X_prec;
-    dati_pagerank.Y = Y;
-    dati_pagerank.S_t = S_t;
-    dati_pagerank.sospesi_Y = 0;
-    dati_pagerank.sospesi_X = 0;
-    dati_pagerank.index = 0;
-    dati_pagerank.index2 = 0;
-    dati_pagerank.epsilon = eps;
-    dati_pagerank.dumping_factor = d;
-    dati_pagerank.maxiter = maxiter;
-    dati_pagerank.N_iter = numiter;
-    dati_pagerank.N_thread = taux;
-    dati_pagerank.exit = false;
-    dati_pagerank.grafo = g;
-    dati_pagerank.signal_mutex = &global_mutex;
-    dati_pagerank.vector_lock = &vector_lock;
-    dati_pagerank.vector_cond = &vector_cond;
-    
-    for(int i = 0; i < taux; i++){
-        xpthread_create(&tid[i], calculate_pagerank, &dati_pagerank, HERE);
-    }
-
-    for(int i = 0; i < taux; i++){
-        xpthread_join(tid[i], NULL, HERE);
-    }
-
-    *numiter = *(dati_pagerank.N_iter);
-
-    free(Y);
-    xpthread_mutex_destroy(&vector_lock, HERE);
-    xpthread_cond_destroy(&vector_cond, HERE);    
-
-    return X_vector;
-}
-
 /*
  * Returns the list of indexes: one for every k max
  * ------------------------------------------------
@@ -316,7 +121,7 @@ void printStats(double *ranks,int length,int iter_count,int max_iter,int k, FILE
  * 
  * graph_cmp(const *char,const *char)
  * Compares two representations of graphs to determinate if they
- * are eHEREvalent
+ * are equivalent
  * ---------------------------------------------------------
  * The second function is useful to check if, between parsing
  * versions, the same output is always produced
@@ -374,7 +179,7 @@ void graph_cmp(char *path1,char *path2){
 
     }while(true);
 
-    fprintf(stdout,"graphs not eHEREvalent\n");
+    fprintf(stdout,"graphs not equivalent\n");
     fprintf(stdout,"%s%s",buff_1,buff_2);
 
     free(buff_1);
@@ -382,4 +187,222 @@ void graph_cmp(char *path1,char *path2){
     xfclose(f1,HERE);
     xfclose(f2,HERE);
     return;
+}
+
+/**
+ * Pagerank Computation Utilities
+ * ---------------------------------------------------------------------------
+ *      typedef struct pagerank_shared_attr {
+ *          //doppi puntatori per i vettori delle iterazioni per fare lo swap
+ *          double          **X_current;
+ *          double          **X_previous;
+ *          double          *Y;
+ *          double          S_t;
+ *          double          S_t_shared;
+ *          double          epsilon;
+ *          double          error;
+ *          double          dumping_factor;
+ *          graph           *grph;
+ *          int             max_iter;
+ *          bool            do_X;
+ *          bool            do_Y;
+ *          bool            exit;
+ *          int             waiting_on_Y;
+ *          int             waiting_on_X;
+ *          int             *curr_iter;
+ *          int             thread_count;
+ *          pthread_mutex_t *cond_mux;
+ *          pthread_mutex_t *shared_mux;
+ *          pthread_cond_t  *cond;
+ *      } pagerank_shared_attr;
+ *
+ *      typedef struct pagerank_thread_attr{
+ *          int interval_start;
+ *          int interval_end;
+ *          pagerank_shared_attr *shared;
+ *      } pagerank_thread_attr;
+ * -------------------------------------------------------------------
+ */
+
+
+
+void *pagerank_routine(void *attr){
+    pagerank_thread_attr *arg = (pagerank_thread_attr *)attr;
+    pagerank_shared_attr *shared = arg->shared;
+    const double teleport = (1.0 - shared->dumping_factor) / ((double)shared->grph->nodes);
+    double my_S_t;
+    double my_error;
+    
+    //swap variable for vectors;
+    double *temp;
+    do{
+        // === Computation of Y components ===
+        for(int i = arg->interval_start; i<=arg->interval_end; i++){
+            if(shared->grph->out[i] > 0)
+                shared->Y[i] = ((*(shared->X_previous))[i]) / ((double)(shared->grph->out)[i]);
+        }
+
+        // === Thread suspension ===
+        xpthread_mutex_lock(shared->cond_mux, HERE);
+            if((shared->waiting_on_Y) == (shared->thread_count - 1)){
+                shared->do_X = true;
+                shared->do_Y = false;
+                xpthread_cond_broadcast(shared->cond, HERE);
+            } 
+            else {
+                shared->waiting_on_Y += 1;
+                    while (shared->do_X == false)
+                        xpthread_cond_wait(shared->cond, shared->cond_mux, HERE);  
+                shared->waiting_on_Y -= 1;
+            }
+        xpthread_mutex_unlock(shared->cond_mux, HERE);
+
+        // === Computation of X components ===
+
+        my_error    = 0.0;
+        my_S_t      = 0.0;
+
+        for(int i = arg->interval_start; i<=arg->interval_end; i++){
+            double sum_dead_end = 0.0;
+            inmap *obj = ((shared->grph)->in)[i];
+            
+            if(obj != NULL){
+                for(int i = 0; i < obj->length; i++)
+                    sum_dead_end += shared->Y[obj->vector[i]];
+            }     
+            (*(shared->X_current))[i] = teleport + (shared->dumping_factor * sum_dead_end) + (shared->dumping_factor / (double)(shared->grph->nodes)) * shared->S_t;  
+
+            //compute S_t for next iteration
+            if(shared->grph->out[i] == 0)
+                my_S_t += ((*(shared->X_current))[i]);
+
+            //compute error for next iteration
+            my_error += fabs(((*(shared->X_current))[i]) - ((*(shared->X_previous))[i]));
+        }
+        
+        // === Thread suspension ===
+        xpthread_mutex_lock(shared->cond_mux, HERE);
+            /**
+             * Dump shared error and S_t for next iteration
+             */
+            shared->error       += my_error;
+            shared->S_t_shared  += my_S_t;
+
+            if((shared->waiting_on_X) == (shared->thread_count - 1)){
+                /**
+                 * 1. If error more than threshold (epsilon) exit
+                 * 
+                 * 2. Swap local S_t with global S_t
+                 */
+                if((shared->error < shared->epsilon) || (*(shared->curr_iter) == (shared->max_iter - 1)))
+                    shared->exit = true;
+                
+                shared->error       = 0;              
+                shared->S_t         = shared->S_t_shared;
+                shared->S_t_shared  = 0.0;
+                
+                xpthread_mutex_lock(shared->shared_mux, HERE);
+
+                    temp = *(shared->X_previous);
+                    *(shared->X_previous) = *(shared->X_current);
+                    *(shared->X_current) = temp;
+
+                    if(shared->exit == true){
+                        free(*(shared->X_previous));
+                        *(shared->X_previous) = NULL;
+                    }
+
+                    *(shared->curr_iter) += 1;
+
+                xpthread_mutex_unlock(shared->shared_mux, HERE);
+                shared->do_Y = true;
+                shared->do_X = false;
+                xpthread_cond_broadcast(shared->cond, HERE);
+            }
+            else {
+                shared->waiting_on_X += 1;
+
+                while(shared->do_Y == false)
+                    xpthread_cond_wait(shared->cond, shared->cond_mux , HERE);
+
+                shared->waiting_on_X -= 1;
+            }
+
+        xpthread_mutex_unlock(shared->cond_mux, HERE);
+
+    } while(shared->exit == false);
+
+    pthread_exit(NULL);
+}
+
+double *pagerank(graph *grph, double dumping, double eps, int max_iter, int thread_count, int *iter_count){
+     
+    // iteration vectors allocation
+    double *X_current   = xmalloc(grph->nodes * sizeof(double), HERE);
+            X_previous  = xmalloc(grph->nodes * sizeof(double), HERE);
+    double *Y           = xmalloc(grph->nodes * sizeof(double), HERE);
+
+    // popolamento vettori iterazioni
+    const double init = 1.0 /(double)grph->nodes;
+    for(int i = 0; i < grph->nodes; i++){
+        X_current[i]    = init;
+        X_previous[i]   = init;
+    }
+
+    //Conto un iterazione fatta
+    // (*numiter) += 1;
+
+    pthread_t tid[thread_count];
+    pagerank_shared_attr shared;
+
+    pthread_mutex_t cond_mux;
+    pthread_cond_t cond;
+    xpthread_mutex_init(&cond_mux, HERE);
+    xpthread_cond_init(&cond, HERE);
+
+    shared.cond             = &cond;
+    shared.cond_mux         = &cond_mux;
+    shared.curr_iter        = iter_count;
+    shared.do_X             = false;
+    shared.do_Y             = true;
+    shared.dumping_factor   = dumping;
+    shared.epsilon          = eps;
+    shared.error            = 0.0;
+    shared.exit             = false;
+    shared.grph             = grph;
+    shared.max_iter         = max_iter;
+    shared.S_t              = ((double)grph->dead_count) * init;
+    shared.S_t_shared       = 0;
+    shared.thread_count     = thread_count;
+    shared.shared_mux       = &signal_mux;
+    shared.waiting_on_X     = 0;
+    shared.waiting_on_Y     = 0;
+    shared.X_previous       = &X_previous;
+    shared.X_current        = &X_current;
+    shared.Y                = Y;
+    
+    pagerank_thread_attr thread_attr[thread_count];
+    int int_start = 0;
+    const int int_length = (int)(grph->nodes /thread_count);
+
+    for(int i = 0; i < thread_count; i++){
+        thread_attr[i].interval_start   = int_start;
+        thread_attr[i].interval_end     = i == thread_count - 1 ? grph->nodes -1 : int_start + int_length;
+        thread_attr[i].shared           = &shared;
+        xpthread_create(&tid[i], pagerank_routine, &(thread_attr[i]), HERE);
+
+        int_start += int_length +1;
+    }
+
+    for(int i = 0; i < thread_count; i++){
+        xpthread_join(tid[i], NULL, HERE);
+    }
+
+    *iter_count = *(shared.curr_iter);
+
+    free(Y);
+    xpthread_mutex_destroy(&cond_mux, HERE);
+    xpthread_cond_destroy(&cond, HERE);    
+
+    return X_current;
 }

@@ -1,4 +1,3 @@
-#include "./src/lib_supp.h"
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -11,18 +10,15 @@
 #include "./src/lib_graph.h"
 #include "./src/lib_pagerank.h"
 
-
-
 #define _GNU_SOURCE
 
 #define HERE __FILE__,__LINE__
 
 /**
  * global variables shared with signal handler
- * 
  */
-double *global_X_prec;
-pthread_mutex_t global_mutex;
+double *X_previous;
+pthread_mutex_t signal_mux;
 
 int main(int argc, char *argv[]){
     int k = 3;
@@ -67,7 +63,7 @@ int main(int argc, char *argv[]){
 
     if(optind >= argc){
         puts("[pagerank] no input file");
-        puts("usage: ./pagerank [-h] [-k K] [-m M] [-d D] [-e E] [-t T] [[infile]]");
+        puts("usage: ./pagerank [-h] [-k K] [-m M] [-d D] [-e E] [-t T] <infile>");
         return -1;
     }
 

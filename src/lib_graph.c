@@ -311,6 +311,12 @@ graph *graph_parse(const char *pathname, const int thread_count){
 }
 
 void *parser_routine(void *attr){
+
+    /**
+     * NOTE: Maybe adding internal bufferization and an entry point could
+     * increase performance.
+     */
+
     parser_attr *arg = (parser_attr *)attr;
 
     int ori,dest;
@@ -336,8 +342,6 @@ void *parser_routine(void *attr){
          * 
          * takes mutex from mutex_vector
          */
-        //inmap_push(&(((arg->graph)->in)[dest]), ori, &((arg->dyn_size)[dest]));
-
         xpthread_mutex_lock(&(arg->graph_mux[dest % MUX_DEF]),HERE);
             inmap_push(&(((arg->graph)->in)[dest]), ori, &((arg->dyn_size)[dest]));
             ((arg->graph)->out)[ori] += 1;
