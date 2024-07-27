@@ -7,10 +7,10 @@
 #include "lib_supp.h"
 
 #define HERE __FILE__,__LINE__
-#define BUF_SIZE    2048
-#define DYN_DEF     10
-#define MUX_DEF     500
-#define THREAD_TERM -1  //should be negative or bigger than the highest graph node index
+#define BUF_SIZE    4096
+#define DYN_DEF     300
+#define MUX_DEF     1009    //should be a prime number
+#define THREAD_TERM -1      //should be negative or bigger than the highest graph node index
 
 typedef struct{
     int *vector;

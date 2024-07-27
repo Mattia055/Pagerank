@@ -251,8 +251,6 @@ graph *graph_parse(const char *pathname, const int thread_count){
         
     }
 
-
-
     //read from buffer
     int ready_for_join = 0;
     index = 0;
@@ -293,7 +291,6 @@ graph *graph_parse(const char *pathname, const int thread_count){
 
     for(int i = 0; i<g->nodes; i++){
         if(g->out[i] == 0){
-
             //realloc array
             if(size == length){
                 size   *= 2;
