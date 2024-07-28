@@ -1,10 +1,11 @@
 #ifndef LIBPGRK
 #define LIBPGRK
 
-#include "lib_graph.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include <pthread.h>
+
+#include "lib_graph.h"
 
 extern double *X_previous;
 extern pthread_mutex_t signal_mux;
@@ -21,18 +22,9 @@ void *calculate_pagerank(void *arg);
 
 double *pagerank(graph *g, double d, double eps, int maxiter, int taux, int *numiter);
 
-
 int *find_K_Max(double *ranks, int length,int k);
 
 void printStats(double *ranks,int length,int iter_count,int max_iter,int k, FILE *stream);
-
-/**
- * DEBUG ONLY
- */
-
-void graph_save(char *path, graph *grph);
-
-void graph_cmp(char *path1,char *path2);
 
 typedef struct pagerank_shared_attr {
     //doppi puntatori per i vettori delle iterazioni per fare lo swap
@@ -68,5 +60,25 @@ double *pagerank(graph *grph, double dumping, double eps, int max_iter, int thre
 
 void *pagerank_routine(void *);
 
+typedef struct sig_handler_attr{
+    int             *nodes;
+    int             *iter_count;
+    double          **X_previous;
+    pthread_mutex_t *shared_mux;
+    FILE            *signal_stream;
+
+}sig_handler_attr;
+
+double find_max(double *arr,int length);
+
+void *signal_handler_routine(void *);
+
+/**
+ * DEBUG ONLY
+ */
+
+void graph_save(char *path, graph *grph);
+
+void graph_cmp(char *path1,char *path2);
 
 #endif

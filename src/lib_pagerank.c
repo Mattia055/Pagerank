@@ -1,10 +1,14 @@
-#include "lib_pagerank.h"
-#include "lib_supp.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <math.h>
 #include <string.h>
+#include <signal.h>
+
+#include "lib_pagerank.h"
+#include "lib_supp.h"
+
 #define HERE __FILE__,__LINE__
 
 void printHelp(){
@@ -29,7 +33,7 @@ void printHelp(){
     puts("-d D\t\tdamping factor (default 0.9)");
     puts("-e E\t\tmax error (default 1.0e7)");
     puts("-t T\t\tthreads count (default 3)");
-    puts("-s\t\t enable sending signals SIGUSR1 (print top node at iteration x)");
+    puts("-s\t\tDisable signal handler (SIGUSR1 to print current max node)");
 }
 
 inline void printGraphInfo(graph *g,FILE *stream,bool comment){
@@ -38,6 +42,7 @@ inline void printGraphInfo(graph *g,FILE *stream,bool comment){
     else
         fprintf(stream, "%%Number of nodes: %d \n%%Number of dead-end nodes: %d\n%%Number of valid arcs: %d\n", g->nodes, g->dead_count, g->edges);
 }
+
 /*
  * Returns the list of indexes: one for every k max
  * ------------------------------------------------
@@ -103,93 +108,6 @@ void printStats(double *ranks,int length,int iter_count,int max_iter,int k, FILE
 }
 
 /**
- * DEBUG ONLY
- * ----------
- * Definition of functions that can be used to save the
- * representation of a graph to a file, and compare two
- * representation.
- * ----------------------------------------------------
- * The file representation of a graph is a file formatted
- * like a mtx file, without the number of nodes (v1) or the
- * number of edges. This can be esaily added just like the
- * comments at the begin.
- * 
- * graph_save(graph *,const char *)
- * Saves the representation of the graph to a file. Since the
- * Adjacent Lists are sorted while parsing, the file output
- * is deterministic for each graph.
- * 
- * graph_cmp(const *char,const *char)
- * Compares two representations of graphs to determinate if they
- * are equivalent
- * ---------------------------------------------------------
- * The second function is useful to check if, between parsing
- * versions, the same output is always produced
- */
-void graph_save(char *path, graph *grph){
-    FILE *file = xfopen(path,"w",HERE);
-    //print brief graph info
-    printGraphInfo(grph,file,true);
-    //print first line
-    fprintf(file,"%d %d %d %d\n",grph->nodes,grph->nodes,grph->edges,grph->dead_count);
-    //print all valid edges
-    inmap *curr_obj;
-    for(int i = 0; i<grph->nodes;i++){
-        curr_obj = grph->in[i];
-        if(curr_obj == NULL)
-            continue;
-        for(int j = 0; j<curr_obj->length;j++){
-            fprintf(file,"%d %d\n",curr_obj->vector[j],i);
-        }
-    }
-    
-    //print all dead end nodes
-    for(int i = 0; i<grph->dead_count;i++){
-        fprintf(file,"%d\n",grph->dead_end[i]);
-    }
-    xfclose(file,HERE);
-}
-
-void graph_cmp(char *path1,char *path2){
-    FILE *f1 = xfopen(path1,"r",HERE);
-    FILE *f2 = xfopen(path2,"r",HERE);
-
-    char *buff_1 = NULL;
-    char *buff_2 = NULL;
-    size_t get1 = 0;
-    size_t get2 = 0;
-
-    int e1,e2;
-
-    do{
-        e1 = getline(&buff_1,&get1,f1);
-        e2 = getline(&buff_2,&get2,f2);
-
-        if(e1 == -1 || e2 == -1){
-            if(e1 == e2){
-                fprintf(stdout,"graphs eHEREvalent\n");
-            }
-            else{
-                break;
-            }
-            return;
-        }
-
-        if(strcmp(buff_1,buff_2)!=0)break;
-
-    } while(true);
-
-    fprintf(stdout,"graphs not equivalent\n");
-    fprintf(stdout,"%s\n%s\n",buff_1,buff_2);
-
-    free(buff_1);
-    free(buff_2);
-    xfclose(f1,HERE);
-    xfclose(f2,HERE);
-    return;
-}
-
-/**
  * Pagerank Computation Utilities
  * ---------------------------------------------------------------------------
  *      typedef struct pagerank_shared_attr {
@@ -223,9 +141,6 @@ void graph_cmp(char *path1,char *path2){
  *      } pagerank_thread_attr;
  * -------------------------------------------------------------------
  */
-
-
-
 void *pagerank_routine(void *attr){
     pagerank_thread_attr *arg = (pagerank_thread_attr *)attr;
     pagerank_shared_attr *shared = arg->shared;
@@ -409,4 +324,157 @@ double *pagerank(graph *grph, double dumping, double eps, int max_iter, int thre
     xpthread_cond_destroy(&cond, HERE);    
 
     return X_current;
+}
+
+inline double find_max(double *arr,int length){
+    int index       = 0;
+    double curr_max = arr[0];
+
+    for(int i = 1; i<length; i++){
+        if(arr[i]>curr_max){
+            curr_max = arr[i];
+            index = i;
+        }
+    }
+
+    return index;
+}
+
+void *signal_handler_routine(void *attr){
+    sigset_t local_mask;
+    sigemptyset(&local_mask);
+    sigaddset(&local_mask,SIGUSR1);
+    sigaddset(&local_mask,SIGUSR2);
+    pthread_sigmask(SIG_SETMASK,&local_mask,NULL);
+
+    sig_handler_attr *arg = (sig_handler_attr *)attr;
+    int sig, curr_index, iter_count;
+    double curr_max;
+    int action = -1;
+
+    do{
+        if(sigwait(&local_mask,&sig)!=0)
+            error("[sigwait]",HERE);
+
+        if(sig == SIGUSR1){
+            xpthread_mutex_lock(arg->shared_mux,HERE);
+                if(*(arg->iter_count)==0){
+                    action = 0;
+                }
+                else if(*(arg->X_previous) == NULL){
+                    action = 1;
+                }
+                else {
+                    curr_index  = find_max(*(arg->X_previous),*(arg->nodes));
+                    curr_max    = (*(arg->X_previous))[curr_index];
+                    iter_count  = *(arg->iter_count);
+                    action      = 2;
+                }
+            xpthread_mutex_unlock(arg->shared_mux,HERE);
+
+            switch(action){
+                case 0: fputs("Pagerank computation not began [parsing graph]\n",arg->signal_stream);
+                break;
+                case 1: fputs("Pagerank computation completed\n",arg->signal_stream);
+                break;
+                case 2: fprintf(arg->signal_stream,"Iteration count: %d\tMax node%d\tValue:%f\n",iter_count,curr_index,curr_max);
+                break;
+                default:
+                exit(EXIT_FAILURE);
+            }
+        }
+        else if(sig == SIGUSR2){
+            break;
+        }
+    } while(1);
+
+    pthread_exit(NULL);
+
+}
+
+/**
+ * DEBUG ONLY
+ * ----------
+ * Definition of functions that can be used to save the
+ * representation of a graph to a file, and compare two
+ * representation.
+ * ----------------------------------------------------
+ * The file representation of a graph is a file formatted
+ * like a mtx file, without the number of nodes (v1) or the
+ * number of edges. This can be esaily added just like the
+ * comments at the begin.
+ * 
+ * graph_save(graph *,const char *)
+ * Saves the representation of the graph to a file. Since the
+ * Adjacent Lists are sorted while parsing, the file output
+ * is deterministic for each graph.
+ * 
+ * graph_cmp(const *char,const *char)
+ * Compares two representations of graphs to determinate if they
+ * are equivalent
+ * ---------------------------------------------------------
+ * The second function is useful to check if, between parsing
+ * versions, the same output is always produced
+ */
+void graph_save(char *path, graph *grph){
+    FILE *file = xfopen(path,"w",HERE);
+    //print brief graph info
+    printGraphInfo(grph,file,true);
+    //print first line
+    fprintf(file,"%d %d %d %d\n",grph->nodes,grph->nodes,grph->edges,grph->dead_count);
+    //print all valid edges
+    inmap *curr_obj;
+    for(int i = 0; i<grph->nodes;i++){
+        curr_obj = grph->in[i];
+        if(curr_obj == NULL)
+            continue;
+        for(int j = 0; j<curr_obj->length;j++){
+            fprintf(file,"%d %d\n",curr_obj->vector[j],i);
+        }
+    }
+    
+    //print all dead end nodes
+    for(int i = 0; i<grph->dead_count;i++){
+        fprintf(file,"%d\n",grph->dead_end[i]);
+    }
+    xfclose(file,HERE);
+}
+
+void graph_cmp(char *path1,char *path2){
+    FILE *f1 = xfopen(path1,"r",HERE);
+    FILE *f2 = xfopen(path2,"r",HERE);
+
+    char *buff_1 = NULL;
+    char *buff_2 = NULL;
+    size_t get1 = 0;
+    size_t get2 = 0;
+
+    int e1,e2;
+
+    do{
+        e1 = getline(&buff_1,&get1,f1);
+        e2 = getline(&buff_2,&get2,f2);
+
+        if(e1 == -1 || e2 == -1){
+            if(e1 == e2){
+                fprintf(stdout,"graphs eHEREvalent\n");
+            }
+            else{
+                break;
+            }
+            return;
+        }
+
+        if(strcmp(buff_1,buff_2)!=0)break;
+
+    } while(true);
+
+    fprintf(stdout,"graphs not equivalent\n");
+    fprintf(stdout,"%s\n%s\n",buff_1,buff_2);
+
+    free(buff_1);
+    free(buff_2);
+    xfclose(f1,HERE);
+    xfclose(f2,HERE);
+    return;
 }
