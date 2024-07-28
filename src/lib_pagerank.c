@@ -131,7 +131,7 @@ void graph_save(char *path, graph *grph){
     //print brief graph info
     printGraphInfo(grph,file,true);
     //print first line
-    fprintf(file,"%d %d %d\n",grph->nodes,grph->nodes,grph->edges,grph->dead_count);
+    fprintf(file,"%d %d %d %d\n",grph->nodes,grph->nodes,grph->edges,grph->dead_count);
     //print all valid edges
     inmap *curr_obj;
     for(int i = 0; i<grph->nodes;i++){
@@ -177,10 +177,10 @@ void graph_cmp(char *path1,char *path2){
 
         if(strcmp(buff_1,buff_2)!=0)break;
 
-    }while(true);
+    } while(true);
 
     fprintf(stdout,"graphs not equivalent\n");
-    fprintf(stdout,"%s%s",buff_1,buff_2);
+    fprintf(stdout,"%s\n%s\n",buff_1,buff_2);
 
     free(buff_1);
     free(buff_2);
@@ -229,7 +229,7 @@ void graph_cmp(char *path1,char *path2){
 void *pagerank_routine(void *attr){
     pagerank_thread_attr *arg = (pagerank_thread_attr *)attr;
     pagerank_shared_attr *shared = arg->shared;
-    const double teleport = (1.0 - shared->dumping_factor) / ((double)shared->grph->nodes);
+    const double teleport = (1.0 - shared->dumping_factor) / ((double)(shared->grph->nodes));
     double my_S_t;
     double my_error;
     
@@ -268,7 +268,7 @@ void *pagerank_routine(void *attr){
             
             if(obj != NULL){
                 for(int i = 0; i < obj->length; i++)
-                    sum_dead_end += shared->Y[obj->vector[i]];
+                    sum_dead_end += (shared->Y)[(obj->vector[i])];
             }     
             (*(shared->X_current))[i] = teleport + (shared->dumping_factor * sum_dead_end) + (shared->dumping_factor / (double)(shared->grph->nodes)) * shared->S_t;  
 
@@ -277,7 +277,7 @@ void *pagerank_routine(void *attr){
                 my_S_t += ((*(shared->X_current))[i]);
 
             //compute error for next iteration
-            my_error += fabs(((*(shared->X_current))[i]) - ((*(shared->X_previous))[i]));
+            my_error += fabs((*(shared->X_current))[i] - (*(shared->X_previous))[i]);
         }
         
         // === Thread suspension ===
@@ -308,6 +308,10 @@ void *pagerank_routine(void *attr){
                     *(shared->X_current) = temp;
 
                     if(shared->exit == true){
+                        /**
+                         * Setting previous vector as null
+                         * for the signal handler
+                         */
                         free(*(shared->X_previous));
                         *(shared->X_previous) = NULL;
                     }
@@ -340,12 +344,12 @@ double *pagerank(graph *grph, double dumping, double eps, int max_iter, int thre
     // iteration vectors allocation
     double *X_current   = xmalloc(grph->nodes * sizeof(double), HERE);
             X_previous  = xmalloc(grph->nodes * sizeof(double), HERE);
-    double *Y           = xmalloc(grph->nodes * sizeof(double), HERE);
+    double *Y           = xcalloc(grph->nodes , sizeof(double), HERE);
 
     // popolamento vettori iterazioni
     const double init = 1.0 /(double)grph->nodes;
     for(int i = 0; i < grph->nodes; i++){
-        X_current[i]    = init;
+        X_current [i]   = init;
         X_previous[i]   = init;
     }
 
@@ -387,11 +391,11 @@ double *pagerank(graph *grph, double dumping, double eps, int max_iter, int thre
 
     for(int i = 0; i < thread_count; i++){
         thread_attr[i].interval_start   = int_start;
-        thread_attr[i].interval_end     = i == thread_count - 1 ? grph->nodes -1 : int_start + int_length;
+        thread_attr[i].interval_end     = (i == thread_count - 1)? grph->nodes -1 : int_start + int_length;
         thread_attr[i].shared           = &shared;
         xpthread_create(&tid[i], pagerank_routine, &(thread_attr[i]), HERE);
 
-        int_start += int_length +1;
+        int_start += int_length +1 ;
     }
 
     for(int i = 0; i < thread_count; i++){

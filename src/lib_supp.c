@@ -50,6 +50,7 @@ void *xreallocarray(void *ptr, size_t nmemb, size_t size, char *file, int line){
     if(ret == NULL){
         error("[Bad reallocarray]",file,line);
     }
+    return ret;
 }
 
 

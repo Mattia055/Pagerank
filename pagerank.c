@@ -95,9 +95,7 @@ int main(int argc, char *argv[]){
     graph *g = graph_parse(infile,threads);
 
     printGraphInfo(g,stdout,false);
-
     double *ranks = pagerank(g, d, e, m, threads, &iter_count);
-    printf("itercount = %d\n",iter_count);
 
     printStats(ranks,g->nodes,iter_count,m,k,stdout);
 

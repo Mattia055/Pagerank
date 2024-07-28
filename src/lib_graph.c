@@ -94,7 +94,7 @@ void graph_destroy(graph *g){
 void *parser_routine(void *);
 void *sorter_routine(void *);
 
-graph *graph_parse(const char *pathname, const int thread_count){
+graph *graph_parse(const char *pathname, int thread_count){
     char    *getline_buff = NULL;
     size_t  getline_size = 0;
     int     r,c,edges_count;
@@ -186,6 +186,7 @@ graph *graph_parse(const char *pathname, const int thread_count){
             pc_buffer[index]                = ori -1;
             pc_buffer[index + 1 % BUF_SIZE] = dest-1;
             index = (index + 2) % BUF_SIZE;
+            (g->out[ori-1])+=1;
         xsem_post(&data_items,HERE); 
 
     }
@@ -235,12 +236,10 @@ graph *graph_parse(const char *pathname, const int thread_count){
      * DEBUG: Add error support
      * When 0 lists are assigned to a thread 
      */
-
+    
     int int_start   = 0;
     const int int_length  = (int)(g->nodes / thread_count);
-
     sorter_attr thread_attr[thread_count];
-
     for(int i = 0; i<thread_count; i++){
         thread_attr[i].interval_start   = int_start;
         thread_attr[i].interval_end     = i == thread_count - 1? g->nodes -1 : int_start + int_length;
@@ -341,10 +340,21 @@ void *parser_routine(void *attr){
          * Uses static inline method inmap_push
          * 
          * takes mutex from mutex_vector
+         * 
+         * Actually using an array of mutexes is a problem
+         * still dont know why but it seems that it creates
+         * a race condition between threads
+         * ------------------------------------------------
+         * Debug: now i use 1 mutex so sequencial writes,
+         * change that to a bitmap that identifies each cell
+         * of "in", and a try-lock mechanism that does at such:
+         * 1. if the cell is empty occupy and write 
+         * 2. else write the node to an interal buffer and try the write
+         * in the next cycle. The buffer should be implemented as a queue
+         * so that the last node inserted will be tried forward in time
          */
-        xpthread_mutex_lock(&(arg->graph_mux[dest % MUX_DEF]),HERE);
+        xpthread_mutex_lock(&((arg->graph_mux[dest % MUX_DEF])),HERE);
             inmap_push(&(((arg->graph)->in)[dest]), ori, &((arg->dyn_size)[dest]));
-            ((arg->graph)->out)[ori] += 1;
         xpthread_mutex_unlock(&(arg->graph_mux[dest % MUX_DEF]),HERE);
 
     }

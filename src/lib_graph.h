@@ -89,7 +89,7 @@ typedef struct sorter_attr{
     int                 interval_end;
 }sorter_attr;
 
-graph *graph_parse(const char *,const int);
+graph *graph_parse(const char *, int);
 
 void *parser_routine(void *);
 

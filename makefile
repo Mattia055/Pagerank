@@ -1,7 +1,7 @@
 # definizione del compilatore e dei flag di compilazione
 # che vengono usate dalle regole implicite
 CC		=gcc -g
-CFLAGS	= -Wall -O -std=c11
+CFLAGS	= -Wall -Wextra -Wuninitialized -O3 -std=gnu99
 LDLIBS	= -lm -lrt -pthread
 
 # eseguibili da costruire
@@ -17,19 +17,19 @@ all: $(EXECS)
 # perché il defualt di make in questo caso va bene
 
 lib_supp.o: $(LIB)lib_supp*
-	$(CC)  -c $(LIB)lib_supp.c -o $@
+	$(CC) $(CFLAGS) -c $(LIB)lib_supp.c -o $@
 
 lib_graph.o: $(LIB)lib_graph* $(LIB)lib_supp.h
-	$(CC)  -c $(LIB)lib_graph.c -o $@
+	$(CC) $(CFLAGS) -c $(LIB)lib_graph.c -o $@
 
 lib_pagerank.o:$(LIB)*.h $(LIB)lib_pagerank.c
-	$(CC)  -c $(LIB)lib_pagerank.c -o $@
+	$(CC) $(CFLAGS) -c $(LIB)lib_pagerank.c -o $@
 
 pagerank.o: pagerank.c $(LIB)*.h
-	$(CC)  -c pagerank.c -o $@
+	$(CC) $(CFLAGS) -c pagerank.c -o $@
 
 pagerank.exe: lib_supp.o lib_graph.o lib_pagerank.o pagerank.o
-	$(CC)  $(CFLAGS) $^ -o $@ $(LDLIBS)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 # target che cancella eseguibili e file oggetto
 clean:
