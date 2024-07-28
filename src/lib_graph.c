@@ -1,17 +1,16 @@
-#include "lib_graph.h"
-#include "lib_supp.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <semaphore.h>
 #include <pthread.h>
 #include <stdbool.h>
 
+#include "lib_graph.h"
+#include "lib_supp.h"
+
 /**
  * NOTES
  * ----------------------------------------
  * The following are defined in header file
- * - inmap_free()
- * - inmap_push()
  * - HERE
  * - BUF_SIZE
  * - DYN_DEF
@@ -47,6 +46,38 @@ void graph_destroy(graph *g){
 
     free(g->in);
     free(g);
+}
+
+/**
+ * inmap_push()
+ * ------------
+ * param 
+ *      inmap **obj: pointer to inmap struct inside "in" vector
+ *      int    elem: node to push in the array
+ *      int   *size: pointer to int variable, useful to realloc the vector
+ */
+inline void inmap_push(inmap **obj, int elem, int *size){
+    if(*obj == NULL){
+        *obj = xmalloc(sizeof(inmap), HERE);
+        *size = DYN_DEF;
+        (*obj)->vector = xmalloc(DYN_DEF * sizeof(int), HERE);
+        (*obj)->length = 0;
+    }
+    else if((*obj)->length == *size){
+        *size *= 2;
+        (*obj)->vector = xrealloc((*obj)->vector, (*size) * sizeof(int), HERE);
+    }
+
+    (*obj)->vector[(*obj)->length] = elem;
+    (*obj)->length += 1;
+
+}
+
+inline void inmap_free(inmap *ptr){
+    if(ptr == NULL)return;
+
+    free(ptr->vector);
+    free(ptr);
 }
 
 /**
@@ -91,9 +122,6 @@ void graph_destroy(graph *g){
  * from the main thread that updates the count on
  * the "out" array
  */
-void *parser_routine(void *);
-void *sorter_routine(void *);
-
 graph *graph_parse(const char *pathname, int thread_count){
     char    *getline_buff = NULL;
     size_t  getline_size = 0;

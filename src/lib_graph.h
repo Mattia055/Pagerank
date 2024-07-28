@@ -1,10 +1,7 @@
 #ifndef LIBGRPH
 #define LIBGRPH
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <semaphore.h>
-#include "lib_supp.h"
 
 #define HERE __FILE__,__LINE__
 #define BUF_SIZE    4096
@@ -26,38 +23,9 @@ typedef struct{
     int *dead_end;      //vector of dead end nodes tag (length: dead_count)
 }graph;
 
-/**
- * inmap_push()
- * ------------
- * param 
- *      inmap **obj: pointer to inmap struct inside "in" vector
- *      int    elem: node to push in the array
- *      int   *size: pointer to int variable, useful to realloc the vector
- */
+void inmap_push(inmap **obj, int elem, int *size);
 
-static inline void inmap_push(inmap **obj, int elem, int *size){
-    if(*obj == NULL){
-        *obj = xmalloc(sizeof(inmap), HERE);
-        *size = DYN_DEF;
-        (*obj)->vector = xmalloc(DYN_DEF * sizeof(int), HERE);
-        (*obj)->length = 0;
-    }
-    else if((*obj)->length == *size){
-        *size *= 2;
-        (*obj)->vector = xrealloc((*obj)->vector, (*size) * sizeof(int), HERE);
-    }
-
-    (*obj)->vector[(*obj)->length] = elem;
-    (*obj)->length += 1;
-
-}
-
-static inline void inmap_free(inmap *ptr){
-    if(ptr == NULL)return;
-
-    free(ptr->vector);
-    free(ptr);
-}
+void inmap_free(inmap *ptr);
 
 graph *graph_alloc(int nodes, int edges);
 
