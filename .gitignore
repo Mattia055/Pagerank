@@ -13,7 +13,8 @@
 # DIRECTORIES TO IGNORE
 #
 ./temp
-./test/
-./old/
-./parses/
+./test
+./old
+./parses
+./.vscode
 
