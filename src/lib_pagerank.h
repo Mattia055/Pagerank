@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 #include "lib_graph.h"
 
@@ -80,5 +81,9 @@ void *signal_handler_routine(void *);
 void graph_save(char *path, graph *grph);
 
 void graph_cmp(char *path1,char *path2);
+
+void xgettimeofday(struct timeval *t, bool check_time, char *file, int line);
+
+double exctract_time(struct timeval start,struct timeval end,bool check_time);
 
 #endif

@@ -5,6 +5,7 @@
 #include <math.h>
 #include <string.h>
 #include <signal.h>
+#include <sys/time.h>
 
 #include "lib_pagerank.h"
 #include "lib_supp.h"
@@ -477,4 +478,17 @@ void graph_cmp(char *path1,char *path2){
     xfclose(f1,HERE);
     xfclose(f2,HERE);
     return;
+}
+
+inline void xgettimeofday(struct timeval *t, bool check_time, char *file, int line){
+    if(check_time == false)return;
+    if(gettimeofday(t,NULL)!=0){
+        error("[gettimeofday]",file,line);
+    }
+}
+
+inline double exctract_time(struct timeval start,struct timeval end,bool check_time){
+    if(check_time == false)return -1;
+    return (end.tv_sec - start.tv_sec)+((end.tv_usec - start.tv_usec)*1e-6);
+
 }
