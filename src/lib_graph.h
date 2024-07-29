@@ -4,9 +4,18 @@
 #include <semaphore.h>
 
 #define HERE __FILE__,__LINE__
-#define BUF_SIZE    4096
-#define DYN_DEF     300
-#define MUX_DEF     1009    //should be a prime number
+
+#ifndef BUF_SIZE
+#define BUF_SIZE 4096
+#endif
+#ifndef DYN_DEF
+#define DYN_DEF 300
+#endif
+
+#ifndef MUX_DEF
+#define MUX_DEF 1009    //should be a prime number
+#endif
+
 #define THREAD_TERM -1      //should be negative or bigger than the highest graph node index
 
 typedef struct{
