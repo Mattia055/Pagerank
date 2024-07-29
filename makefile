@@ -1,20 +1,18 @@
-# definizione del compilatore e dei flag di compilazione
-# che vengono usate dalle regole implicite
-CC		=gcc -g
+CC		= gcc -g
 CFLAGS	= -Wall -Wextra -Wuninitialized -O3 -std=gnu99
 LDLIBS	= -lm -lrt -pthread
 
+# preprocessors definitions for testbench
+TEST_DEFS	= -DSIGNAL_STREAM=stderr -DINFO_STREAM=stderr -DCHECK_TIME=true
+# preprocessors definition for grid search
+GRAPH_DEFS	= -DBUF_SIZE=4096 -DDYN_DEF=300 -DMUX_DEF=1009
+
 # eseguibili da costruire
-EXECS	= pagerank.exe 
+EXECS	= pagerank
 LIB 	= ./src/
 
-
-# di default make cerca di realizzare il primo target 
 all: $(EXECS)
 	rm -f *.o
-
-# non devo scrivere il comando associato ad ogni target 
-# perché il defualt di make in questo caso va bene
 
 lib_supp.o: $(LIB)lib_supp*
 	$(CC) $(CFLAGS) -c $(LIB)lib_supp.c -o $@
@@ -28,10 +26,16 @@ lib_pagerank.o:$(LIB)*.h $(LIB)lib_pagerank.c
 pagerank.o: pagerank.c $(LIB)*.h
 	$(CC) $(CFLAGS) -c pagerank.c -o $@
 
-pagerank.exe: lib_supp.o lib_graph.o lib_pagerank.o pagerank.o
+pagerank: lib_supp.o lib_graph.o lib_pagerank.o pagerank.o
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
-# target che cancella eseguibili e file oggetto
+testbench.o: pagerank.c $(LIB)*.h
+	$(CC) $(CFLAGS) $(TEST_DEFS) -c pagerank.c -o $@
+
+testbench: lib_supp.o lib_graph.o lib_pagerank.o testbench.o
+	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
+	@rm -f *.o
+
 clean:
 	rm -f $(EXECS) *.o *.exe *log* *.zip *.val *vgcore*
 
