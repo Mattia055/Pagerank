@@ -6,8 +6,6 @@
 #include <semaphore.h>
 #include <pthread.h>
 
-
-
 /**
  * ### Error Display Function
  * ----------------------
