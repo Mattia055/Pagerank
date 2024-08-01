@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
             signal = false;
             break;
         case 'h':
-            printHelp();
+            printHelp(argv[0]);
             exit(EXIT_SUCCESS);
         default: /* '?' */
             exit(EXIT_FAILURE);
@@ -123,9 +123,8 @@ int main(int argc, char *argv[])
      */
 
     xgettimeofday(&parse_start,CHECK_TIME,HERE);
-    graph *g    = graph_parse(infile, threads);
+    graph *g    = graph_parse(infile, threads,CHECK_TIME);
     xgettimeofday(&parse_end,CHECK_TIME,HERE);
-    graph_nodes = g->nodes;
 
     printGraphInfo(g,INFO_STREAM, false);
 
