@@ -9,6 +9,7 @@ GRAPH_DEFS	= -DBUF_SIZE=4096 -DDYN_DEF=300 -DMUX_DEF=1009
 
 # eseguibili da costruire
 EXECS	= pagerank
+OTHER	= testbench
 LIB 	= ./src/
 
 all: $(EXECS)
@@ -37,5 +38,5 @@ testbench: lib_supp.o lib_graph.o lib_pagerank.o testbench.o
 	@rm -f *.o
 
 clean:
-	rm -f $(EXECS) *.o *.exe *log* *.zip *.val *vgcore*
+	rm -f $(EXECS) $(OTHER) *.o *.exe *log* *.zip *.val *vgcore*
 
