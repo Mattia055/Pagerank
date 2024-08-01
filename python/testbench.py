@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-import argparse,os,psutil
+import argparse,os,psutil,subprocess
+
+# path to pagerank directory
+# either:
+# 1. relative -> from this script directory
+# 2. absolute
+PAGERANK_DIR = "../"
 
 """
 Utility to testbench a set of files or a batch of files
@@ -11,8 +17,20 @@ Produces two output files:
 Uses argparse to 
 """
 
-def main(pagerank_attr:list,runs:int,file_path:list[str],flags:dict)->None:
-    pass
+def main(pagerank_attr:list = None ,runs:int = None, file_path:list[str] = None, flags:dict = None)->None:
+    #compile testbench if needed
+    try:
+        CompletedProcess = subprocess.run(["make","testbench"],capture_output=True,text = True)
+    except subprocess.CalledProcessError as e:
+        pass
+        with open(flags.log+"txt","w") | open("testbench_avg.txt","w") as testbench | testbench_avg: 
+            ### for each file
+            for file in file_path:
+                #eseguo tutte le run
+                for i in range(runs):
+
+        #start testing for each file
+
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="testbench.py")
@@ -23,6 +41,7 @@ if __name__=="__main__":
     parser.add_argument("-m","--maxiter",help="Max iterations",type=int,default = 200)
     parser.add_argument("-s","--signal",help="Allow signal handler",action="store_false")
     parser.add_argument("-r","--runs",help="number of runs per file",type=int,default = 10)
+    parser.add_argument("-T","--test",help="DEBUG ONLY",action="store_true")
     # file management parameters
     parser.add_argument("input_files", nargs='+', help="paths to input files")
     parser.add_argument("-p","--print",action = "store_false",help="print each test result to file")
@@ -34,40 +53,43 @@ if __name__=="__main__":
     # Parse arguments
     args = parser.parse_args()
 
-    flags = {
-        "print":    args.print,
-        "verbose":  args.verbose,
-        "time":     args.time,
-        "valgrind": args.valgrind,
-        "log":      args.log
-    }
+    if(args.test):
+        main()
+    else:
+        flags = {
+            "print":    args.print,
+            "verbose":  args.verbose,
+            "time":     args.time,
+            "valgrind": args.valgrind,
+            "log":      args.log
+        }
 
-    # Validate numeric arguments
-    for arg in [args.threads, args.epsilon, args.dumping, args.top_k, args.maxiter, args.runs]:
-        if arg < 0:
-            raise ValueError(f"Parameter {arg} is malformed. It must be non-negative.")
-    
-    #check if files each file exists and it has access to be read
-    #files that do not exist will be discarded
-    files           = []
-    pagerank_attr  = [args.signal, args.threads, args.epsilon, args.dumping, args.top_k, args.maxiter]
+        # Validate numeric arguments
+        for arg in [args.threads, args.epsilon, args.dumping, args.top_k, args.maxiter, args.runs]:
+            if arg < 0:
+                raise ValueError(f"Parameter {arg} is malformed. It must be non-negative.")
+        
+        #check if files each file exists and it has access to be read
+        #files that do not exist will be discarded
+        files           = []
+        pagerank_attr  = [args.signal, args.threads, args.epsilon, args.dumping, args.top_k, args.maxiter]
 
-    for path in args.input_files:
-        if not os.path.access(path,os.R_OK):
-            print(f"No read permission on file/folder {path}")
+        for path in args.input_files:
+            if not os.path.access(path,os.R_OK):
+                print(f"No read permission on file/folder {path}")
 
-        if os.path.isdir(path):
-            for dirpath, _, filenames in os.walk(path):
-                for filename in filenames:
-                    file_path = os.path.join(dirpath, filename)
-                    if os.access(file_path, os.R_OK):
-                        files.append(file_path)
+            if os.path.isdir(path):
+                for dirpath, _, filenames in os.walk(path):
+                    for filename in filenames:
+                        file_path = os.path.join(dirpath, filename)
+                        if os.access(file_path, os.R_OK):
+                            files.append(file_path)
 
-        elif os.path.isfile(path):
-            files.append(path)
-        # add support for symbolic links
-    
-    if len(files) == 0:
-        print("No files provided had read rights")
+            elif os.path.isfile(path):
+                files.append(path)
+            # add support for symbolic links
+        
+        if len(files) == 0:
+            print("No files provided had read rights")
 
-    main(pagerank_attr,args.run,files,flags)
+        main(pagerank_attr,args.run,files,flags)
