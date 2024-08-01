@@ -6,14 +6,10 @@
 #define HERE __FILE__,__LINE__
 
 #ifndef BUF_SIZE
-#define BUF_SIZE 4096
+#define BUF_SIZE 2048
 #endif
 #ifndef DYN_DEF
-#define DYN_DEF 300
-#endif
-
-#ifndef MUX_DEF
-#define MUX_DEF 1009    //should be a prime number
+#define DYN_DEF 100
 #endif
 
 #define THREAD_TERM -1      //should be negative or bigger than the highest graph node index
@@ -28,27 +24,26 @@ typedef struct{
     int edges;          //valid edge count
     inmap **in;         //vector of ptrs to inmap structs (if NULL dead end)
     int *out;           //vector (one per node) with the count of outer edges
-    int dead_count;     //cound of dead nodes
-    int *dead_end;      //vector of dead end nodes tag (length: dead_count)
+    int dead_count;
 }graph;
 
-void inmap_push(inmap **obj, int elem, int *size);
+void inmap_push(inmap **obj, int elem, int *size)__attribute__((always_inline));
 
-void inmap_free(inmap *ptr);
+void inmap_free(inmap *ptr)__attribute__((always_inline));
 
 graph *graph_alloc(int nodes, int edges);
 
 void graph_destroy(graph *);
 
-typedef struct parser_attr{
-    int             index;
-    int             *pc_buffer;
-    int             *dyn_size;
-    pthread_mutex_t *buffer_mux;
-    pthread_mutex_t *graph_mux;
-    sem_t           *free_slots;
-    sem_t           *data_items;
-    graph           *graph;
+typedef struct parser_new_attr{
+    int id;
+    int *buffer;
+    int index;
+    sem_t *free_slots;
+    sem_t *data_items;
+    int *dyn_size;
+    inmap **in;
+    
 }parser_attr;
 
 typedef struct sorter_attr_shared{
@@ -66,13 +61,12 @@ typedef struct sorter_attr{
     int                 interval_end;
 }sorter_attr;
 
-graph *graph_parse(const char *, int);
+graph *graph_parse(const char *,int ,bool);
 
 void *parser_routine(void *);
 
 int cmp(const void *a, const void *b);
 
 void *sorter_routine(void *);
-
 
 #endif

@@ -15,7 +15,7 @@ void graph_save(char *path, graph *grph);
 
 void graph_cmp(char *path1,char *path2);
 
-void printHelp();
+void printHelp(const char *name);
 
 void printGraphInfo(graph *g, FILE *stream,bool comment);
 

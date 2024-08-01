@@ -12,8 +12,8 @@
 
 #define HERE __FILE__,__LINE__
 
-void printHelp(){
-    puts("usage: pagerank [-h] [-s] [-k K] [-m M] [-d D] [-e E] [-t T] infile");
+void printHelp(const char *name){
+    printf("usage: %s [-h] [-s] [-k K] [-m M] [-d D] [-e E] [-t T] infile\n",name);
     puts("");
     puts("Compute pagerank for a directed graph represented by the list of its edges");
     puts("following the Matrix Market format: https://math.nist.gov/MatrixMarket/formats.html#MMformat");
@@ -38,6 +38,7 @@ void printHelp(){
 }
 
 inline void printGraphInfo(graph *g,FILE *stream,bool comment){
+
     if(!comment)
         fprintf(stream, "Number of nodes: %d \nNumber of dead-end nodes: %d\nNumber of valid arcs: %d\n", g->nodes, g->dead_count, g->edges);
     else
@@ -435,8 +436,9 @@ void graph_save(char *path, graph *grph){
     }
     
     //print all dead end nodes
-    for(int i = 0; i<grph->dead_count;i++){
-        fprintf(file,"%d\n",grph->dead_end[i]);
+    for(int i = 0; i<grph->nodes;i++){
+        if(grph->out[i] == 0)
+            fprintf(file,"%d\n",i);
     }
     xfclose(file,HERE);
 }

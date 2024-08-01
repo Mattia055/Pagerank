@@ -3,8 +3,13 @@
 #include <semaphore.h>
 #include <pthread.h>
 #include <stdbool.h>
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <sys/time.h>
+#include <math.h>
 
 #include "lib_graph.h"
+#include "lib_pagerank.h"
 #include "lib_supp.h"
 
 /**
@@ -24,26 +29,14 @@ graph *graph_alloc(int nodes, int edges){
     g->edges = edges;
     g->out  = xcalloc(nodes,sizeof(int),    HERE);
     g->in   = xcalloc(nodes,sizeof(inmap *),HERE);
-    /**
-     * following are just placeholders
-     * they will be set later on
-     */
-    g->dead_count   = 0;
-    g->dead_end     = NULL;
     return g;
 }
 
 void graph_destroy(graph *g){
-
-    if(g->dead_end != NULL){
-        free(g->dead_end);
-    }
     free(g->out);
-
-    for(int i = 0; i<g->nodes; i++){
+    for(int i = 0; i<g->nodes; i++)
         inmap_free(g->in[i]);
-    }
-
+    
     free(g->in);
     free(g);
 }
@@ -122,7 +115,12 @@ inline void inmap_free(inmap *ptr){
  * from the main thread that updates the count on
  * the "out" array
  */
-graph *graph_parse(const char *pathname, int thread_count){
+graph *graph_parse(const char *pathname, int thread_count,bool take_time){
+    
+    struct timeval start,end,alloc_start,alloc_end,file_start,file_end,sort_start,sort_end;
+    xgettimeofday(&start,take_time,HERE);
+    xgettimeofday(&alloc_start,take_time,HERE);
+
     char    *getline_buff = NULL;
     size_t  getline_size = 0;
     int     r,c,edges_count;
@@ -152,46 +150,41 @@ graph *graph_parse(const char *pathname, int thread_count){
      */
 
     int *dynamic_size   = xmalloc(r * sizeof(int),HERE);
-    int *pc_buffer      = xmalloc(BUF_SIZE * sizeof(int),HERE);
 
-    sem_t free_slots, data_items;
-    xsem_init(&free_slots,0,BUF_SIZE / 2,HERE);
-    xsem_init(&data_items,0,0,HERE);
+    int interval_length = g->nodes / thread_count;
 
-    pthread_mutex_t buffer_mutex;
-    xpthread_mutex_init(&buffer_mutex,HERE);
+    int *pc_buffer[thread_count];
+    int     pc_index[thread_count];
+    sem_t   free_slots_parser[thread_count];
+    sem_t   data_items_parser[thread_count];
 
-    /**
-     * Uses an array of mutex to synch each thread on the corresp.
-     * struct.
-     * 
-     * The choice on which mutex to use is done using the '%' operator
-     * so that it minimizes collisions;
-     */
-    pthread_mutex_t *graph_mux = xmalloc(MUX_DEF * sizeof(pthread_mutex_t),HERE);
-    for(int i = 0; i<MUX_DEF; i++){
-        xpthread_mutex_init(&(graph_mux[i]),HERE);
+    /*init of components */
+    for(int i = 0; i<thread_count; i++){
+        pc_buffer[i] = xmalloc(sizeof(int) * BUF_SIZE,HERE);
+        pc_index[i] = 0;
+        xsem_init(&(free_slots_parser[i]),0,BUF_SIZE/2,HERE);
+        xsem_init(&(data_items_parser[i]),0,0,HERE);
     }
 
-    pthread_t tid[thread_count];
-    parser_attr parser_t_attr;
-    parser_t_attr.graph       = g;  
-    parser_t_attr.buffer_mux  = &buffer_mutex;
-    parser_t_attr.graph_mux   = graph_mux;
-    parser_t_attr.pc_buffer   = pc_buffer;
-    parser_t_attr.index       = 0;
-    parser_t_attr.free_slots  = &free_slots;
-    parser_t_attr.data_items  = &data_items;
-    parser_t_attr.dyn_size    = dynamic_size;
+    pthread_t   tid[thread_count];
+    parser_attr arg[thread_count];  
 
-    for(int i = 0; i < thread_count; i++){
-        xpthread_create(&tid[i],parser_routine,&parser_t_attr,HERE);
+    for(int i = 0; i<thread_count; i++){
+        arg[i].id = i;
+        arg[i].buffer = pc_buffer[i];
+        arg[i].index = 0; 
+        arg[i].dyn_size = dynamic_size;
+        arg[i].free_slots = &(free_slots_parser[i]);
+        arg[i].data_items = &(data_items_parser[i]);
+        arg[i].in         = g->in;
+
+        xpthread_create(&tid[i],parser_routine,&arg[i],HERE);
     }
 
-    //START READING EDGES FROM FILE
+    xgettimeofday(&alloc_end,take_time,HERE);
+    xgettimeofday(&file_start,take_time,HERE);
 
     int ori,dest;
-    int index = 0;
     while(getline(&getline_buff,&getline_size,file) != -1){
         lines ++;
 
@@ -209,40 +202,58 @@ graph *graph_parse(const char *pathname, int thread_count){
             continue;
         }
 
-        //insert edge on pc_buffer
-        xsem_wait(&free_slots,HERE);
-            pc_buffer[index]                = ori -1;
-            pc_buffer[index + 1 % BUF_SIZE] = dest-1;
-            index = (index + 2) % BUF_SIZE;
-            (g->out[ori-1])+=1;
-        xsem_post(&data_items,HERE); 
+        //insert edge on pc_buffer of one thread
+        /**
+         * to insert the edge, the in[dest] must be locked
+         * so i insert the edge in just one buffer, selection
+         * the index using the modulo operator
+         */
+
+        int j = ((dest-1) / interval_length) % thread_count;
+
+        //printf("ori %d dest %d\n",ori-1,dest-1);
+
+        xsem_wait(&(free_slots_parser[j]),HERE);
+            pc_buffer[j][pc_index[j]]                   = ori -1;
+            pc_buffer[j][(pc_index[j] + 1)  % BUF_SIZE] = dest-1;
+            pc_index[j] = (pc_index[j] + 2) % BUF_SIZE;
+        xsem_post(&(data_items_parser[j]),HERE); 
+        (g->out[ori-1])+=1;
 
     }
+
+    xgettimeofday(&file_end,take_time,HERE);
 
     //insert termination value for threads
     for(int i = 0; i<thread_count; i++){
-        xsem_wait(&free_slots,HERE);
-            pc_buffer[index]                = THREAD_TERM;
-            pc_buffer[index + 1 % BUF_SIZE] = THREAD_TERM;
-            index = (index + 2) % BUF_SIZE;
-        xsem_post(&data_items,HERE); 
+        xsem_wait(&(free_slots_parser[i]),HERE);
+            pc_buffer[i][pc_index[i]]                   = THREAD_TERM;
+            pc_buffer[i][(pc_index[i] + 1)  % BUF_SIZE] = THREAD_TERM;
+            pc_index[i] = (pc_index[i] + 2) % BUF_SIZE;
+        xsem_post(&(data_items_parser[i]),HERE); 
     }
+
     for(int i = 0; i<thread_count; i++){
         xpthread_join(tid[i],NULL,HERE);
     }
 
     //deallocs struct needed no more
     xfclose(file,HERE);
-    for(int i = 0; i<MUX_DEF; i++){
-        xpthread_mutex_destroy(&graph_mux[i],HERE);
-    }
-    free(graph_mux);
     free(dynamic_size);
     free(getline_buff);
-    xsem_destroy(&free_slots,HERE);
 
-    //i'm gonna reuse buffer_mux and the semaphores (same for the buffer)
-    xsem_init(&free_slots,0,BUF_SIZE,HERE);
+    for(int i = 0; i<thread_count; i++){
+        free(pc_buffer[i]);
+        xsem_destroy(&(free_slots_parser[i]),HERE);
+        xsem_destroy(&(data_items_parser[i]),HERE);
+    }
+    
+    int *sorter_buffer = xmalloc(BUF_SIZE * sizeof(int),HERE);
+    sem_t free_slots_sorter,data_items_sorter;
+    pthread_mutex_t buffer_mux;
+    xsem_init(&free_slots_sorter,0,BUF_SIZE,HERE);
+    xsem_init(&data_items_sorter,0,0,HERE);
+    xpthread_mutex_init(&buffer_mux,HERE);
     
     /**
      * Create a new group of threads which sorts all "in[i]" in their
@@ -253,11 +264,11 @@ graph *graph_parse(const char *pathname, int thread_count){
     //struct shared between threads
     sorter_attr_shared sorter_shared;
     sorter_shared.pc_index    = 0;
-    sorter_shared.pc_buffer   = pc_buffer;
+    sorter_shared.pc_buffer   = sorter_buffer;
     sorter_shared.graph       = g;
-    sorter_shared.buffer_mux  = &buffer_mutex;
-    sorter_shared.free_slots  = &free_slots;
-    sorter_shared.data_items  = &data_items;
+    sorter_shared.buffer_mux  = &buffer_mux;
+    sorter_shared.free_slots  = &free_slots_sorter;
+    sorter_shared.data_items  = &data_items_sorter;
 
     //calculate interval length
     /**
@@ -277,17 +288,19 @@ graph *graph_parse(const char *pathname, int thread_count){
         int_start += int_length +1;
         
     }
+    xgettimeofday(&sort_start,take_time,HERE);
+    //puts("SORTER STARTED");
 
     //read from buffer
     int ready_for_join = 0;
-    index = 0;
+    int index = 0;
     int duplicate;
 
     do{
-        xsem_wait(&data_items,HERE);
-            duplicate = pc_buffer[index];
+        xsem_wait(&data_items_sorter,HERE);
+            duplicate = sorter_buffer[index];
             index = index + 1 % BUF_SIZE;
-        xsem_post(&free_slots,HERE);
+        xsem_post(&free_slots_sorter,HERE);
 
         if(duplicate == THREAD_TERM){
             ready_for_join++;
@@ -303,90 +316,56 @@ graph *graph_parse(const char *pathname, int thread_count){
         xpthread_join(tid[i],NULL,HERE);
     }
 
-    free(pc_buffer);
-    xsem_destroy(&free_slots,HERE);
-    xsem_destroy(&data_items,HERE);
-    xpthread_mutex_destroy(&buffer_mutex,HERE);
+    xgettimeofday(&sort_end,take_time,HERE);
 
-    /**
-     * Find add dead end nodes (out[node] = 0)
-     */
-
-    int size    = DYN_DEF;
-    int length  = 0;
-    int *arr    = xmalloc(size * sizeof(int),HERE);
-
+    int dead_count = 0;
     for(int i = 0; i<g->nodes; i++){
-        if(g->out[i] == 0){
-            //realloc array
-            if(size == length){
-                size   *= 2;
-                arr     = xreallocarray(arr,size,sizeof(int),HERE); 
-            }
+        if(g->out[i] == 0) dead_count++;
+    }
+    g->dead_count = dead_count;
 
-            arr[length++] = i;
-        }
-    } 
+    free(sorter_buffer);
+    xsem_destroy(&free_slots_sorter,HERE);
+    xsem_destroy(&data_items_sorter,HERE);
+    xpthread_mutex_destroy(&buffer_mux,HERE);
 
-    //final realloc
-    arr = xrealloc(arr,length*sizeof(int),HERE);
-    g->dead_end     = arr;
-    g->dead_count   = length;
+    xgettimeofday(&end,take_time,HERE);
+
+    if(take_time){
+        fprintf(stderr,"\n======\tTime Stats\t======\n");
+        fprintf(stderr,"alloc time\t\t%.6f sec\n",exctract_time(alloc_start,alloc_end,take_time));
+        fprintf(stderr,"read time\t\t%.6f sec\n",exctract_time(file_start,file_end,take_time));
+        fprintf(stderr,"sort time\t\t%.6f sec\n",exctract_time(sort_start,sort_end,take_time));
+        fprintf(stderr,"total time\t\t%.6f sec\n",exctract_time(start,end,take_time));
+        fprintf(stderr,"\n=========================\n");
+    }
 
     return g;
 
 }
-
 void *parser_routine(void *attr){
-
-    /**
-     * NOTE: Maybe adding internal bufferization and an entry point could
-     * increase performance.
-     */
-
+    
     parser_attr *arg = (parser_attr *)attr;
-
     int ori,dest;
 
     while(true){
         xsem_wait(arg->data_items,HERE);
-            xpthread_mutex_lock(arg->buffer_mux,HERE);
 
-                ori     = arg->pc_buffer[arg->index];
-                dest    = arg->pc_buffer[(arg->index + 1) % BUF_SIZE];
+                ori     = arg->buffer[arg->index];
+                dest    = arg->buffer[(arg->index + 1) % BUF_SIZE];
                 arg->index = (arg->index + 2) % BUF_SIZE;
 
-            xpthread_mutex_unlock(arg->buffer_mux,HERE);
         xsem_post(arg->free_slots,HERE);
 
         if(ori == THREAD_TERM || dest == THREAD_TERM){
             pthread_exit(NULL);
         }
-
-        /**
-         * insert the node ori in in[dest].
-         * Uses static inline method inmap_push
-         * 
-         * takes mutex from mutex_vector
-         * 
-         * Actually using an array of mutexes is a problem
-         * still dont know why but it seems that it creates
-         * a race condition between threads
-         * ------------------------------------------------
-         * Debug: now i use 1 mutex so sequencial writes,
-         * change that to a bitmap that identifies each cell
-         * of "in", and a try-lock mechanism that does at such:
-         * 1. if the cell is empty occupy and write 
-         * 2. else write the node to an interal buffer and try the write
-         * in the next cycle. The buffer should be implemented as a queue
-         * so that the last node inserted will be tried forward in time
-         */
-        xpthread_mutex_lock(&((arg->graph_mux[dest % MUX_DEF])),HERE);
-            inmap_push(&(((arg->graph)->in)[dest]), ori, &((arg->dyn_size)[dest]));
-        xpthread_mutex_unlock(&(arg->graph_mux[dest % MUX_DEF]),HERE);
+        
+        inmap_push(&(((arg)->in)[dest]), ori, &((arg->dyn_size)[dest]));
 
     }
 }
+
 
 int cmp(const void *a, const void *b){
     return (*(int *)a - *(int *)b);
@@ -447,7 +426,6 @@ void *sorter_routine(void *attr){
             shared->pc_index = (shared->pc_index + 1) % BUF_SIZE;
         xpthread_mutex_unlock(shared->buffer_mux,HERE);
     xsem_post(shared->data_items,HERE);
-
+    //puts("SORTER EXITING");
     pthread_exit(NULL);
 }
-
