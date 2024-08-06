@@ -6,6 +6,7 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <bits/sigaction.h>
 
 #include "lib_pagerank.h"
 #include "lib_supp.h"
@@ -34,7 +35,7 @@ void printHelp(const char *name){
     puts("-d D\t\tdamping factor (default 0.9)");
     puts("-e E\t\tmax error (default 1.0e7)");
     puts("-t T\t\tthreads count (default 3)");
-    puts("-s\t\tDisable signal handler (SIGUSR1 to print current max node)");
+    puts("-s\t\tEnable signal handler (SIGUSR1 to print current max node)");
 }
 
 inline void printGraphInfo(graph *g,FILE *stream,bool comment){
