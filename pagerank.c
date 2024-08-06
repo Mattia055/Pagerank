@@ -6,6 +6,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <sys/time.h>
+#include <bits/sigaction.h>
 
 #include "./src/lib_supp.h"
 #include "./src/lib_graph.h"
@@ -43,7 +44,7 @@ int main(int argc, char *argv[])
     double e = 1e-7;
     int threads = 3;
     // stored true
-    bool signal = true;
+    bool signal = false;
 
     /**
      * Parameter parsing from argv
