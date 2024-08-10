@@ -7,6 +7,9 @@
 *val*
 *.zip
 *.exe
+*.out
+*gmon*
+*gprof*
 testbench
 pagerank
 
@@ -14,9 +17,9 @@ pagerank
 #
 # DIRECTORIES TO IGNORE
 #
-./temp
-./test
-./old
-./parses
-./.vscode
+./temp*
+./test*
+./old*
+./parses*
+./.vscode*
 

@@ -1,9 +1,11 @@
 CC		= gcc -g
-CFLAGS	= -Wall -Wextra -Wuninitialized -O3 -std=gnu99
+
+CFLAGS	= -Wall -Wextra -Wuninitialized -O3 -std=gnu99 -pg
 LDLIBS	= -lm -lrt -pthread
 
+
 # preprocessors definitions for testbench
-TEST_DEFS	= -DSIGNAL_STREAM=stderr -DINFO_STREAM=stderr -DCHECK_TIME=true
+TEST_DEFS	= -DSIGNAL_STREAM=stderr -DINFO_STREAM=stderr -DCHECK_TIME=true -DFORCE_NO_ARGS=1
 # preprocessors definition for grid search
 GRAPH_DEFS	= -DBUF_SIZE=4096 -DDYN_DEF=300 -DMUX_DEF=1009
 

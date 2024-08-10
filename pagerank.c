@@ -26,6 +26,10 @@
 #define CHECK_TIME false
 #endif
 
+#ifndef FORCE_NO_ARGS
+#define FORCE_NO_ARGS false
+#endif
+
 /**
  * global variables shared with signal handler
  */
@@ -45,49 +49,64 @@ int main(int argc, char *argv[])
     int threads = 3;
     // stored true
     bool signal = false;
+    char *infile = NULL;
 
+    if(FORCE_NO_ARGS){
+        e = 1e-4;
+        threads = 8;
+        infile = "test/web-hudong.mtx";
+    }
+    
     /**
      * Parameter parsing from argv
      */
-    int opt;
-    while ((opt = getopt(argc, argv, "shk:m:d:e:t:")) != -1)
-    {
-        switch (opt)
+    else{
+        int opt;
+        while ((opt = getopt(argc, argv, "shk:m:d:e:t:")) != -1)
         {
-        case 'k':
-            k = atoi(optarg);
-            break;
-        case 'm':
-            m = atoi(optarg);
-            break;
-        case 'd':
-            d = atof(optarg);
-            break;
-        case 'e':
-            e = atof(optarg);
-            break;
-        case 't':
-            threads = atoi(optarg);
-            break;
-        case 's':
-            signal = false;
-            break;
-        case 'h':
-            printHelp(argv[0]);
-            exit(EXIT_SUCCESS);
-        default: /* '?' */
-            exit(EXIT_FAILURE);
+            switch (opt)
+            {
+            case 'k':
+                k = atoi(optarg);
+                break;
+            case 'm':
+                m = atoi(optarg);
+                break;
+            case 'd':
+                d = atof(optarg);
+                break;
+            case 'e':
+                e = atof(optarg);
+                break;
+            case 't':
+                threads = atoi(optarg);
+                break;
+            case 's':
+                signal = false;
+                break;
+            case 'h':
+                printHelp(argv[0]);
+                exit(EXIT_SUCCESS);
+            default: /* '?' */
+                exit(EXIT_FAILURE);
+            }
         }
+        
+        if (optind >= argc)
+        {
+            puts("[pagerank] no input file");
+            puts("usage: ./pagerank [-h] [-k K] [-m M] [-d D] [-e E] [-t T] <infile>");
+            return -1;
+        }
+
+        infile = argv[optind];
+
     }
 
-    if (optind >= argc)
-    {
-        puts("[pagerank] no input file");
-        puts("usage: ./pagerank [-h] [-k K] [-m M] [-d D] [-e E] [-t T] <infile>");
+    if(infile == NULL){
+        puts("./testbench: error in force-args");
         return -1;
     }
-
-    char *infile = argv[optind];
 
     int iter_count = 0;
 
